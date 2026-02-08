@@ -59,6 +59,10 @@ datasets/
 uploads/
 temp/
 
+# Plot output (research_plotter saves to temp by default)
+plot_outputs/
+*.plot.html
+
 # ChromaDB and databases
 chroma_db/
 *.db

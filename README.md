@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**An intelligent data analysis agent built with LangChain, featuring RAG memory, multi-LLM support, and powerful data analysis tools.**
+**An intelligent data analysis agent built for researchers—handles messy lab exports, batch processing, and publication-quality visualizations.**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,362 +11,246 @@
 
 </div>
 
-## 🚀 Features
+---
 
-- 🧠 **LangChain Agent Architecture**: Full agent implementation with intelligent tool orchestration
-- 📊 **RAG Memory**: Stores dataset schemas and past analyses for context-aware responses using ChromaDB
-- 🔧 **Powerful Analysis Tools**: 
-  - **SQL Executor**: Run SQL queries on DataFrames using DuckDB
-  - **Chart Generator**: Create visualizations (bar, line, scatter, histogram, box, heatmap)
-  - **Statistics Calculator**: Compute mean, median, std, correlation, and more
-  - **Data Manipulation**: Filter, sort, group, select columns, and more
-- 🤖 **Multi-LLM Support**: OpenAI GPT-4/3.5 and DeepSeek with automatic routing
-- 💬 **Conversation Memory**: Remembers previous questions about the same dataset
-- 💰 **Cost Tracking**: Monitor API usage and costs in real-time
-- 🌐 **Modern Web UI**: Clean, responsive interface for data analysis
-- 📈 **Schema-Agnostic**: Works with any CSV structure without manual configuration
+## 🔬 Built for Research
+
+DataBrain AI Agent is designed for scientists and engineers who work with real-world data: lab equipment exports with junk headers, mixed file formats, sensor glitches, and hundreds of samples. Ask questions in plain English and get answers, trends, and publication-ready plots.
 
 ## 📋 Table of Contents
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Features in Detail](#features-in-detail)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Known Issues](#known-issues)
-- [Contributing](#contributing)
-- [License](#license)
+- [Quick Start for Researchers](#-quick-start-for-researchers)
+- [Research Capabilities](#-research-capabilities)
+- [Installation](#️-installation)
+- [Usage](#-usage)
+- [API Endpoints](#-api-endpoints)
+- [Project Structure](#-project-structure)
+- [Configuration](#️-configuration)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
+## 🚀 Quick Start for Researchers
+
+**Scenario:** You have a folder of tensile test results—some `.csv`, some `.mat`, some `.xlsx`—with lab notes at the top of each file. You want to compare peak load across all samples and create an overlay plot.
+
+### Step 1: Start the server
+
+```bash
+git clone https://github.com/yourusername/DataBrain-AI-Agent.git
+cd DataBrain-AI-Agent
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env       # Add your OPENAI_API_KEY or DEEPSEEK_API_KEY
+
+# Start backend
+cd databrain_agent/backend && python main.py
+```
+
+### Step 2: Open the UI
+
+- Open `frontend/index.html` in your browser, or run `python -m http.server 8080` in the `frontend/` folder and go to `http://localhost:8080`
+
+### Step 3: Upload and analyze
+
+1. **Upload a file or folder**  
+   Drag and drop a `.csv`, `.xlsx`, `.mat`, `.txt`, or `.json` file. The agent auto-detects format and cleans messy headers.
+
+2. **Ask research questions**
+   - *"Which of my 100 samples had the highest displacement?"*
+   - *"Plot the peak load trend across all files"*
+   - *"Create an overlay of Load vs Displacement for every test"*
+   - *"Summarize all files in /path/to/my/experiment_folder"*
+
+3. **Get publication-ready output**  
+   Overlay plots, Master DataFrames, and statistical comparisons—all generated from natural language.
+
+---
+
+## 🧪 Research Capabilities
+
+### Universal Data Loading
+
+One loader for all common research formats—no more "I can't read this" errors.
+
+| Format | Description |
+|--------|-------------|
+| **.csv** | Smart loader skips junk headers and lab notes automatically |
+| **.txt** | Tab-delimited or comma-separated; sniffer finds where data starts |
+| **.xlsx / .xls** | Excel workbooks (first sheet by default) |
+| **.mat** | MATLAB files—nested structs flattened to columns via scipy |
+| **.json** | JSON records or arrays |
+
+Works with mixed folders: raw sensor `.csv`, processed `.mat`, and summary `.xlsx` in the same directory.
+
+### Autonomous Cleaning
+
+Data is cleaned automatically after loading:
+
+- **Junk header detection** – Finds where the table starts (lab notes, metadata, etc.)
+- **Sensor glitches** – Forward-fills null values in numeric columns
+- **Non-numeric strings** – Coerces values like `"N/A"`, `"---"`, `"error"` to `NaN`
+- **Duplicate timestamps** – Removes duplicate rows by time column
+
+No manual cleaning before upload.
+
+### Batch Processing
+
+Analyze hundreds of files in one go:
+
+- **Batch summarizer** – Iterates through every supported file in a folder
+- **Master DataFrame** – One row per file: columns, row count, mean/max/min per numeric column
+- **Trend questions** – *"Which sample had highest displacement?"* *"Plot peak load across all files"*
+- **Downsampling** – Files with >10,000 rows are downsampled for fast plotting
+
+### Publication-Quality Visuals
+
+Automated overlay plots for comparative research:
+
+- **Load vs Displacement** – Stress–strain or force–extension overlays
+- **Time vs Value** – Time-series overlays from multiple files
+- **Fuzzy column detection** – Finds Load, Force, Displacement, Time, Strain, etc. by name
+- **Units in axes** – Extracts units from headers (e.g. `Load (kN)`)
+- **Legend by filename** – Each file is a distinct colored line
+- **Output formats** – Interactive HTML (Plotly) or high-res PNG
+
+---
 
 ## 🛠️ Installation
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- At least one API key:
-  - OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
-  - DeepSeek API key ([Get one here](https://platform.deepseek.com/api_keys)) - Optional
+- Python 3.8+
+- At least one API key: [OpenAI](https://platform.openai.com/api-keys) or [DeepSeek](https://platform.deepseek.com/api_keys)
 
-### Step-by-Step Installation
+### Install
 
-1. **Clone the repository:**
 ```bash
 git clone https://github.com/yourusername/DataBrain-AI-Agent.git
 cd DataBrain-AI-Agent
-```
-
-2. **Create a virtual environment:**
-```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-3. **Install dependencies:**
-```bash
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-4. **Set up environment variables:**
-```bash
-# Copy the example file
 cp .env.example .env
-
-# Edit .env and add your API keys
-# OPENAI_API_KEY=your-openai-key-here
-# DEEPSEEK_API_KEY=your-deepseek-key-here  # Optional
+# Edit .env and add OPENAI_API_KEY=... or DEEPSEEK_API_KEY=...
 ```
 
-## 🚀 Quick Start
-
-1. **Start the backend server:**
-```bash
-cd databrain_agent/backend
-python main.py
-```
-
-The API will be available at `http://localhost:8000`
-
-2. **Open the frontend:**
-   - Option 1: Open `frontend/index.html` directly in your browser
-   - Option 2: Serve with a simple HTTP server:
-   ```bash
-   cd frontend
-   python -m http.server 8080
-   # Then open http://localhost:8080
-   ```
-
-3. **Upload a dataset and start asking questions!**
+---
 
 ## 📖 Usage
 
 ### Basic Workflow
 
-1. **Upload a Dataset**: Click "Upload Dataset" and select a CSV, Excel, or JSON file
-2. **Select Dataset**: Click on a dataset in the sidebar to activate it
-3. **Ask Questions**: Type natural language questions about your data
-4. **View Results**: See answers, charts, and analysis results in the chat interface
+1. **Upload** – CSV, Excel, JSON, MATLAB (.mat), or TXT
+2. **Select** – Choose the dataset in the sidebar
+3. **Ask** – Use natural language; the agent routes to the right tools
+4. **View** – Answers, charts, and summary tables in the chat
 
 ### Example Queries
 
-- **Schema Questions:**
-  - "What columns are in this dataset?"
-  - "How many rows and columns does this dataset have?"
-  - "Show me the first 5 rows"
+**Research & batch:**
+- *"Read all files in /path/to/experiment_folder"*
+- *"Which sample had the highest peak load?"*
+- *"Create an overlay plot of Load vs Displacement for every file"*
+- *"Summarize all files and plot the displacement_max trend"*
 
-- **Analysis Questions:**
-  - "What's the average price?"
-  - "Calculate the correlation between price and quantity"
-  - "Show me summary statistics"
+**General analysis:**
+- *"What columns are in this dataset?"*
+- *"Calculate the correlation between load and displacement"*
+- *"Filter rows where strain > 0.01"*
+- *"Create a bar chart of mean load by sample"*
 
-- **Visualization Requests:**
-  - "Create a bar chart of sales by region"
-  - "Plot a line chart showing trends over time"
-  - "Generate a histogram of the age column"
+### LLM Providers
 
-- **Data Manipulation:**
-  - "Filter rows where age > 30"
-  - "Sort by price in descending order"
-  - "Group by category and show the sum"
+- **Auto** – Chooses the best available provider
+- **OpenAI** – GPT-4 / GPT-3.5
+- **DeepSeek** – OpenAI-compatible API
 
-### LLM Provider Selection
-
-- **Auto (Recommended)**: Automatically selects the best available LLM
-- **OpenAI**: Use OpenAI GPT models (requires OPENAI_API_KEY)
-- **DeepSeek**: Use DeepSeek models (requires DEEPSEEK_API_KEY)
+---
 
 ## 🔌 API Endpoints
 
-### Upload Dataset
-```http
-POST /api/upload-dataset
-Content-Type: multipart/form-data
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/upload-dataset` | POST | Upload CSV, Excel, JSON, MATLAB, TXT |
+| `/api/datasets` | GET | List loaded datasets |
+| `/api/query` | POST | Query the agent (`dataset_name`, `query`, `llm_provider`) |
+| `/api/llm-providers` | GET | Available LLM providers |
+| `/api/cost-tracking` | GET | API usage and costs |
+| `/api/datasets/{name}` | DELETE | Remove a dataset |
 
-file: <file>
-dataset_name: <optional-name>
-```
-
-### List Datasets
-```http
-GET /api/datasets
-```
-
-### Query Agent
-```http
-POST /api/query?dataset_name=<name>&query=<question>&llm_provider=<provider>
-```
-
-### Get LLM Providers
-```http
-GET /api/llm-providers
-```
-
-### Cost Tracking
-```http
-GET /api/cost-tracking
-```
-
-### Delete Dataset
-```http
-DELETE /api/datasets/{dataset_name}
-```
-
-## 🎯 Features in Detail
-
-### RAG Memory
-
-The agent uses ChromaDB to store:
-- Dataset schemas (columns, data types, sample data)
-- Past analysis results
-- Query patterns and context
-
-This enables:
-- Context-aware responses based on previous interactions
-- Automatic schema discovery
-- Improved query understanding
-
-### Multi-LLM Support
-
-- **OpenAI**: GPT-4, GPT-3.5-turbo
-- **DeepSeek**: OpenAI-compatible API
-- **Auto Mode**: Automatically selects the best available provider
-- **Cost Tracking**: Monitor usage for both providers
-
-### Analysis Tools
-
-#### SQL Executor
-Execute SQL queries directly on pandas DataFrames:
-```sql
-SELECT category, AVG(price) FROM df GROUP BY category
-```
-
-#### Chart Generator
-Generate various visualizations:
-- Bar charts
-- Line charts
-- Scatter plots
-- Histograms
-- Box plots
-- Heatmaps (correlation matrices)
-
-#### Statistics Calculator
-Calculate statistical measures:
-- Descriptive statistics (mean, median, std, min, max)
-- Correlation matrices
-- Column-specific statistics
-
-#### Data Manipulator
-Perform data operations:
-- Filter rows by conditions
-- Sort data
-- Group by aggregations
-- Select specific columns
-- Get unique values
+---
 
 ## 📁 Project Structure
 
 ```
 DataBrain-AI-Agent/
-├── databrain_agent/
-│   ├── backend/
-│   │   ├── main.py              # FastAPI server
-│   │   ├── schemas.py           # Pydantic models
-│   │   ├── compat.py            # LangChain compatibility shims
-│   │   ├── agent/
-│   │   │   ├── orchestrator.py  # LangChain agent setup
-│   │   │   ├── memory.py        # RAG memory implementation
-│   │   │   └── prompts.py       # System prompts
-│   │   ├── tools/
-│   │   │   ├── sql_tool.py      # SQL executor
-│   │   │   ├── chart_tool.py    # Chart generator
-│   │   │   ├── stats_tool.py    # Statistics calculator
-│   │   │   └── data_tool.py     # Data manipulation
-│   │   ├── llm/
-│   │   │   ├── multi_llm.py     # LLM router
-│   │   │   └── cost_tracker.py # Cost tracking
-│   │   └── data/
-│   │       ├── loader.py        # Data loading utilities
-│   │       └── vector_store.py # ChromaDB vector store
-│   └── requirements.txt
-├── frontend/
-│   ├── index.html               # Main UI
-│   ├── style.css                # Styles
-│   └── app.js                   # Frontend logic
-├── tests/                       # Test files
-├── docs/                        # Documentation
-├── .env.example                 # Environment template
-├── requirements.txt             # Main dependencies
-├── run_server.sh               # Server startup script
-├── LICENSE                      # MIT License
-└── README.md                    # This file
+├── databrain_agent/backend/
+│   ├── main.py              # FastAPI server
+│   ├── data_cleaner.py      # Universal loader, health clean, research parsing
+│   ├── research_parser.py   # Compatibility shim
+│   ├── agent/
+│   │   ├── orchestrator.py  # Agent & tool orchestration
+│   │   ├── memory.py        # RAG memory (ChromaDB)
+│   │   └── prompts.py
+│   ├── tools/
+│   │   ├── sql_tool.py      # SQL on DataFrames
+│   │   ├── chart_tool.py    # Bar, line, scatter, etc.
+│   │   ├── stats_tool.py    # Statistics
+│   │   ├── data_tool.py     # Filter, sort, group
+│   │   ├── read_file_tool.py         # Load file or directory
+│   │   ├── batch_research_summarizer.py  # Master DataFrame from folder
+│   │   └── research_plotter.py       # Overlay plots
+│   └── llm/
+├── frontend/                # Web UI
+├── tests/
+├── requirements.txt
+└── README.md
 ```
+
+---
 
 ## ⚙️ Configuration
 
-### Environment Variables
-
-Create a `.env` file in the project root:
+### Environment Variables (`.env`)
 
 ```env
-# Required: At least one API key
-OPENAI_API_KEY=your_openai_api_key_here
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
+OPENAI_API_KEY=your_key_here
+DEEPSEEK_API_KEY=your_key_here   # Optional
 ```
 
-### Server Configuration
+### Server
 
-The server runs on `http://0.0.0.0:8000` by default. To change the port, modify `main.py`:
-
-```python
-uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-## 🐛 Known Issues
-
-1. **LangChain Version Compatibility**: The project uses LangChain 0.1.20. Some features may not work with older versions.
-
-2. **Large Datasets**: Very large datasets (>100MB) may cause performance issues. Consider sampling data before upload.
-
-3. **Chart Generation**: Some chart types may fail with certain data types. The system will provide error messages.
-
-4. **Memory Usage**: ChromaDB stores embeddings in memory. Large numbers of datasets may increase memory usage.
-
-5. **API Rate Limits**: Be aware of API rate limits for OpenAI and DeepSeek when processing many queries.
-
-## 🚢 Deployment
-
-### Local Development
+Runs at `http://localhost:8000` by default. Use `run_server.sh` or:
 
 ```bash
-# Using the startup script
-./run_server.sh
-
-# Or manually
-cd databrain_agent/backend
-python main.py
+cd databrain_agent/backend && python main.py
 ```
 
-### Production Deployment
-
-1. **Using Gunicorn:**
-```bash
-pip install gunicorn
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker databrain_agent.backend.main:app
-```
-
-2. **Using Docker** (if Dockerfile exists):
-```bash
-docker build -t databrain-agent .
-docker run -p 8000:8000 --env-file .env databrain-agent
-```
-
-3. **Environment Variables**: Ensure all API keys are set in production environment
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-### Development Setup
-
-```bash
-# Install development dependencies
-pip install -r requirements.txt
-
-# Run tests (if available)
-pytest tests/
-
-# Format code
-black databrain_agent/
-```
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [LangChain](https://www.langchain.com/) for the agent framework
-- [ChromaDB](https://www.trychroma.com/) for vector storage
-- [FastAPI](https://fastapi.tiangolo.com/) for the web framework
-- [DuckDB](https://duckdb.org/) for SQL execution on DataFrames
-
-## 📞 Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for intelligent data analysis**
+**Built for researchers who need to analyze real data, fast.**
 
-[Report Bug](https://github.com/yourusername/DataBrain-AI-Agent/issues) · [Request Feature](https://github.com/yourusername/DataBrain-AI-Agent/issues) · [Documentation](docs/)
+[Report Bug](https://github.com/yourusername/DataBrain-AI-Agent/issues) · [Request Feature](https://github.com/yourusername/DataBrain-AI-Agent/issues)
 
 </div>

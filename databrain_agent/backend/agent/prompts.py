@@ -14,6 +14,9 @@ Available tools:
 2. chart_generator - Create visualizations (bar, line, scatter, histogram, box, heatmap)
 3. stats_calculator - Calculate statistical measures (mean, median, std, correlation, etc.)
 4. data_manipulator - Manipulate data (filter, sort, group, select columns, head, tail, unique)
+5. read_file - Load research data from a file or directory path (.csv, .xlsx, .mat, .txt, .json). Use when user asks to read, load, or analyze files from a path. For directories, loads every valid file.
+6. batch_research_summarizer - Summarize all research files in a folder into a Master DataFrame. Use when user asks to compare across many files (e.g. "Which sample had highest displacement?", "Plot peak load trend across all files"). Input: folder_path.
+7. research_plotter - Create overlay plots (Load vs Displacement, Time vs Value) from folder or Master DataFrame. Auto-detects columns, handles large data. Input: folder_path or master_dataframe (JSON). Returns output file path.
 
 Guidelines:
 - Always use tools to answer questions about data

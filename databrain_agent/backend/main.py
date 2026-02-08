@@ -113,6 +113,10 @@ api_keys_valid = validate_api_keys()
 
 from databrain_agent.backend.data.loader import DataLoader
 from databrain_agent.backend.data.vector_store import DatasetVectorStore
+from databrain_agent.backend.data_cleaner import (
+    universal_loader,
+    SUPPORTED_RESEARCH_EXTENSIONS,
+)
 from databrain_agent.backend.llm.multi_llm import MultiLLM
 from databrain_agent.backend.agent.memory import RAGMemory
 from databrain_agent.backend.agent.orchestrator import AgentOrchestrator
@@ -160,15 +164,14 @@ async def upload_dataset(file: UploadFile = File(...), dataset_name: Optional[st
             tmp_file.write(content)
             tmp_path = tmp_file.name
         
-        # Load dataset based on file type
-        if suffix == ".csv":
-            df = data_loader.load_csv(tmp_path)
-        elif suffix in [".xlsx", ".xls"]:
-            df = data_loader.load_excel(tmp_path)
-        elif suffix == ".json":
-            df = data_loader.load_json(tmp_path)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+        # Load dataset with unified research loader (auto-selects by extension, applies health clean)
+        suffix_lower = suffix.lower()
+        if suffix_lower not in SUPPORTED_RESEARCH_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {suffix}. Supported: {sorted(SUPPORTED_RESEARCH_EXTENSIONS)}"
+            )
+        df = universal_loader(tmp_path, health_clean=True)
         
         # Clean up temp file
         os.unlink(tmp_path)

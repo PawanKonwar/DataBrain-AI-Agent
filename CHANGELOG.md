@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Research data pipeline**: data_cleaner.py with universal_loader, load_any_research_file, health_check_and_clean
+- **read_file tool**: Load research data from file or directory (.csv, .xlsx, .mat, .txt, .json)
+- **batch_research_summarizer tool**: Summarize all files in a folder into Master DataFrame (mean/max/min per column)
+- **research_plotter tool**: Overlay plots (Load vs Displacement, Time vs Value) with fuzzy column detection, downsampling
+- Dependencies: scipy (MATLAB .mat), plotly, kaleido (PNG export)
 - Comprehensive GitHub preparation
 - MIT License
 - Enhanced README with detailed documentation
@@ -22,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool wrapper parameter mapping for chart_generator
 
 ### Changed
+- **Consolidated research parsing**: All logic moved to data_cleaner.py; research_parser.py is now a compatibility shim
+- main.py upload uses universal_loader (load + health clean in one call)
 - Improved .gitignore with comprehensive patterns
 - Enhanced tool descriptions for better LLM routing
 - Better error messages for misrouted chart requests

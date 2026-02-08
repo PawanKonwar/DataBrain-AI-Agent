@@ -142,6 +142,9 @@ The project is now ready for GitHub with:
 ## 📋 Checklist Before First Push
 
 - [ ] Update repository URL in README.md
+- [x] requirements.txt includes scipy, plotly, kaleido
+- [x] Research parsing consolidated in data_cleaner.py
+- [x] research_parser.py maintained as compatibility shim
 - [ ] Verify .env.example has correct template
 - [ ] Test run_server.sh works correctly
 - [ ] Verify all imports work

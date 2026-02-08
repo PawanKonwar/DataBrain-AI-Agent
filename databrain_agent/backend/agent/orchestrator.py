@@ -35,7 +35,10 @@ from databrain_agent.backend.tools import (
     SQLExecutorTool,
     ChartGeneratorTool,
     StatsCalculatorTool,
-    DataManipulationTool
+    DataManipulationTool,
+    ReadFileTool,
+    BatchResearchSummarizerTool,
+    ResearchPlotterTool,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,6 +318,9 @@ class AgentOrchestrator:
         chart_tool = ChartGeneratorTool(df=self.df)
         stats_tool = StatsCalculatorTool(df=self.df)
         data_tool = DataManipulationTool(df=self.df)
+        read_file_tool = ReadFileTool()
+        batch_summarizer_tool = BatchResearchSummarizerTool()
+        research_plotter_tool = ResearchPlotterTool()
         
         # Get actual column names for dynamic descriptions
         actual_columns = [str(col) for col in self.df.columns]
@@ -343,6 +349,24 @@ Available columns: {columns_str}
 Use exact column names from the list above.
 Returns manipulated data as JSON.
 IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - use chart_generator instead."""
+
+        read_file_desc = """Load research data from a file or directory.
+Use when the user asks to read, load, or analyze data from a path.
+Input: path (string) - file path or directory path.
+- File: loads .csv, .xlsx, .mat, .txt, .json using the right format.
+- Directory: loads every valid file inside and combines them.
+Returns summary with columns, row count, and sample data."""
+
+        batch_summarizer_desc = """Summarize all research files in a folder into a Master DataFrame.
+Use when the user asks to compare across many files, e.g. "Which sample had highest displacement?", "Plot peak load trend across all files".
+Input: folder_path (string) - path to folder containing research files.
+For each file: extracts columns and stats (mean, max, min) for numeric columns.
+Returns Master DataFrame: one row per file with filename, columns, and {col}_mean, {col}_max, {col}_min.
+Use output to answer comparison questions or for charts."""
+
+        research_plotter_desc = """Create overlay plots from research data (Load vs Displacement, Time vs Value).
+Input: folder_path (overlay all files) or master_dataframe (JSON from batch_research_summarizer for summary plot).
+Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects columns, downsamples >10k rows, returns file path."""
         
         def clean_json_values(data):
             """
@@ -404,6 +428,12 @@ IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - us
                                 kwargs = {'query': cleaned_value if isinstance(cleaned_value, str) else tool_input}
                             elif tool_name == 'chart_generator':
                                 kwargs = {'chart_type': cleaned_value if isinstance(cleaned_value, str) else tool_input}
+                            elif tool_name == 'read_file':
+                                kwargs = {'path': cleaned_value if isinstance(cleaned_value, str) else tool_input}
+                            elif tool_name == 'batch_research_summarizer':
+                                kwargs = {'folder_path': cleaned_value if isinstance(cleaned_value, str) else tool_input}
+                            elif tool_name == 'research_plotter':
+                                kwargs = {'folder_path': cleaned_value if isinstance(cleaned_value, str) else tool_input}
                             elif tool_name in ['stats_calculator', 'data_manipulator']:
                                 kwargs = {'operation': cleaned_value if isinstance(cleaned_value, str) else tool_input}
                             else:
@@ -417,6 +447,12 @@ IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - us
                             kwargs = {'query': cleaned_str}
                         elif tool_name == 'chart_generator':
                             kwargs = {'chart_type': cleaned_str}
+                        elif tool_name == 'read_file':
+                            kwargs = {'path': cleaned_str}
+                        elif tool_name == 'batch_research_summarizer':
+                            kwargs = {'folder_path': cleaned_str}
+                        elif tool_name == 'research_plotter':
+                            kwargs = {'folder_path': cleaned_str}
                         elif tool_name in ['stats_calculator', 'data_manipulator']:
                             kwargs = {'operation': cleaned_str}
                         else:
@@ -455,6 +491,12 @@ IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - us
                         kwargs = {'query': cleaned_str}
                     elif tool_name == 'chart_generator':
                         kwargs = {'chart_type': cleaned_str}
+                    elif tool_name == 'read_file':
+                        kwargs = {'path': cleaned_str}
+                    elif tool_name == 'batch_research_summarizer':
+                        kwargs = {'folder_path': cleaned_str}
+                    elif tool_name == 'research_plotter':
+                        kwargs = {'folder_path': cleaned_str}
                     elif tool_name in ['stats_calculator', 'data_manipulator']:
                         kwargs = {'operation': cleaned_str}
                     else:
@@ -624,6 +666,30 @@ IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - us
                 func=create_cleaned_tool_func(
                     create_dynamic_wrapper(data_tool._run, data_tool.name),
                     data_tool.name
+                )
+            ),
+            LenientTool(
+                name=read_file_tool.name,
+                description=read_file_desc,
+                func=create_cleaned_tool_func(
+                    create_dynamic_wrapper(read_file_tool._run, read_file_tool.name),
+                    read_file_tool.name
+                )
+            ),
+            LenientTool(
+                name=batch_summarizer_tool.name,
+                description=batch_summarizer_desc,
+                func=create_cleaned_tool_func(
+                    create_dynamic_wrapper(batch_summarizer_tool._run, batch_summarizer_tool.name),
+                    batch_summarizer_tool.name
+                )
+            ),
+            LenientTool(
+                name=research_plotter_tool.name,
+                description=research_plotter_desc,
+                func=create_cleaned_tool_func(
+                    create_dynamic_wrapper(research_plotter_tool._run, research_plotter_tool.name),
+                    research_plotter_tool.name
                 )
             )
         ]
