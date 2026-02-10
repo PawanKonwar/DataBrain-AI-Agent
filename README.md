@@ -21,6 +21,7 @@ DataBrain AI Agent is designed for scientists and engineers who work with real-w
 
 - [Quick Start for Researchers](#-quick-start-for-researchers)
 - [Research Capabilities](#-research-capabilities)
+- [Recent Changes](#-recent-changes)
 - [Installation](#️-installation)
 - [Usage](#-usage)
 - [API Endpoints](#-api-endpoints)
@@ -96,6 +97,8 @@ Data is cleaned automatically after loading:
 
 No manual cleaning before upload.
 
+- **Column name stripping** – Removes leading/trailing whitespace from column names on load (fixes validation errors with columns like `amount`).
+
 ### Batch Processing
 
 Analyze hundreds of files in one go:
@@ -115,6 +118,30 @@ Automated overlay plots for comparative research:
 - **Units in axes** – Extracts units from headers (e.g. `Load (kN)`)
 - **Legend by filename** – Each file is a distinct colored line
 - **Output formats** – Interactive HTML (Plotly) or high-res PNG
+
+---
+
+## 📝 Recent Changes
+
+### Tool Validation & Reliability
+
+- **Pydantic input schemas** – All analysis tools (`stats_calculator`, `data_manipulator`, `chart_generator`) now use proper Pydantic `BaseModel` input schemas with `args_schema: Type[BaseModel]` for type-safe, validated tool calls.
+- **Alias support** – Schemas accept `col` → `column`, `cols` → `columns`, `x_col` → `x_column`, `y_col` → `y_column`, `group_col` → `group_column`, `agg_col` → `agg_column` via `populate_by_name=True`.
+- **Column name stripping** – On dataset upload (`main.py`), DataFrame columns are stripped: `df.columns = [c.strip() for c in df.columns]` to eliminate hidden spaces that caused validation errors.
+- **Handle parsing errors** – Agent executor uses `handle_parsing_errors=True` so the agent can self-correct on malformed tool inputs instead of surfacing a hard error.
+- **System prompt updates** – Prompts explicitly instruct the LLM to use `{"column": "name_of_column"}` for tool calls and avoid abbreviated keys; includes concrete examples for `stats_calculator` and `chart_generator`.
+- **Graceful fallbacks** – Tools return friendly messages like `"Please specify a column."` when required column parameters are missing.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `main.py` | Column stripping on upload; column cleanup in query flow |
+| `agent/orchestrator.py` | `handle_parsing_errors=True`; `QuotedKeyAgentExecutor`; key normalization |
+| `agent/prompts.py` | Blunt tool-input instructions; JSON format examples |
+| `tools/stats_tool.py` | `StatsInput` Pydantic schema; explicit `_run(operation, column)` |
+| `tools/data_tool.py` | `DataManipulationInput` Pydantic schema; explicit `_run(...)` params |
+| `tools/chart_tool.py` | `ChartInput` Pydantic schema; explicit `_run(chart_type, x_column, ...)` |
 
 ---
 
@@ -158,6 +185,7 @@ cp .env.example .env
 
 **General analysis:**
 - *"What columns are in this dataset?"*
+- *"What is the average amount?"* (or any column name)
 - *"Calculate the correlation between load and displacement"*
 - *"Filter rows where strain > 0.01"*
 - *"Create a bar chart of mean load by sample"*
@@ -176,10 +204,13 @@ cp .env.example .env
 |----------|--------|-------------|
 | `/api/upload-dataset` | POST | Upload CSV, Excel, JSON, MATLAB, TXT |
 | `/api/datasets` | GET | List loaded datasets |
+| `/api/datasets/{name}/preview` | GET | Preview first N rows of a dataset |
 | `/api/query` | POST | Query the agent (`dataset_name`, `query`, `llm_provider`) |
 | `/api/llm-providers` | GET | Available LLM providers |
 | `/api/cost-tracking` | GET | API usage and costs |
 | `/api/datasets/{name}` | DELETE | Remove a dataset |
+| `/api/test-chart` | POST | Test chart generator independently |
+| `/api/test-rag-memory` | GET | Test RAG memory (schemas, context search) |
 
 ---
 
@@ -204,7 +235,8 @@ DataBrain-AI-Agent/
 │   │   ├── batch_research_summarizer.py  # Master DataFrame from folder
 │   │   └── research_plotter.py       # Overlay plots
 │   └── llm/
-├── frontend/                # Web UI
+├── frontend/                # Web UI (HTML/JS)
+├── streamlit_ui/            # Streamlit dashboard UI
 ├── tests/
 ├── requirements.txt
 └── README.md
