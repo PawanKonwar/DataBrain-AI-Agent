@@ -1,7 +1,7 @@
 """Statistical analysis tool."""
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Type
 from langchain.tools import BaseTool
-from pydantic import Field
+from pydantic import BaseModel, Field, ConfigDict
 import pandas as pd
 import numpy as np
 import json
@@ -10,17 +10,33 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _strip_column_quotes(value: Optional[str]) -> Optional[str]:
+    """Strip quotes from column names the LLM may send."""
+    if value is None:
+        return None
+    s = str(value).replace("'", "").replace('"', "").strip()
+    return s if s else None
+
+
+class StatsInput(BaseModel):
+    """Input schema for stats_calculator."""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    operation: str = Field(description="describe, correlation, mean, median, std, min, max, count")
+    column: Optional[str] = Field(default=None, description="Column name for the operation", alias="col")
+
+
 class StatsCalculatorTool(BaseTool):
     """Tool for calculating statistical measures."""
-    
+
     name = "stats_calculator"
     description = """Calculate statistical measures on data.
     Available operations: describe, correlation, mean, median, std, min, max, count.
     Returns statistical results as JSON.
     Available columns: Use the actual column names from the dataset."""
-    
+
     df: pd.DataFrame = Field(description="The DataFrame to analyze")
-    
+    args_schema: Type[BaseModel] = StatsInput
+
     def _validate_column(self, column: str) -> str:
         """Validate and normalize column name."""
         if column is None:
@@ -43,6 +59,7 @@ class StatsCalculatorTool(BaseTool):
     def _run(self, operation: str, column: Optional[str] = None) -> str:
         """Calculate statistics."""
         try:
+            column = _strip_column_quotes(column) if column else None
             numeric_df = self.df.select_dtypes(include=[np.number])
             
             if operation == "describe":
@@ -103,9 +120,11 @@ class StatsCalculatorTool(BaseTool):
                     result = {"total_rows": len(self.df), "columns": {col: len(self.df[col].dropna()) for col in self.df.columns}}
                 return json.dumps(result, default=str)
             
-            else:
+            elif operation:
                 return f"Error: Unsupported operation '{operation}'. Use: describe, correlation, mean, median, std, min, max, count"
-        
+            else:
+                return "Error: 'operation' parameter required. Use: describe, correlation, mean, median, std, min, max, count"
+
         except ValueError as e:
             return f"Error: {str(e)}"
         except Exception as e:

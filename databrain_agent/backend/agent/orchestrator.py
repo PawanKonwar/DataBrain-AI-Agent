@@ -43,6 +43,83 @@ from databrain_agent.backend.tools import (
 
 logger = logging.getLogger(__name__)
 
+# Canonical key names for tools - agent may abbreviate "column" as "col"
+KEY_ALIASES = {
+    "col": "column",
+    "cols": "columns",
+    "x_col": "x_column",
+    "y_col": "y_column",
+    "group_col": "group_column",
+    "agg_col": "agg_column",
+    "column_name": "column",
+    "column_names": "columns",
+}
+
+
+def _normalize_tool_input_keys(tool_input: dict) -> dict:
+    """Normalize abbreviated parameter keys (e.g. col -> column) before tool validation."""
+    if not isinstance(tool_input, dict):
+        return tool_input
+    normalized = {}
+    for k, v in tool_input.items():
+        key_lower = str(k).lower().strip()
+        canonical = KEY_ALIASES.get(key_lower, k)
+        normalized[canonical] = v
+    return normalized
+
+
+def _preprocess_llm_text_for_tool_input(text: str) -> str:
+    """
+    Preprocess LLM output before parsing - replace abbreviated keys in Action Input JSON.
+    Validation happens during parse(), so we must fix keys in the raw text first.
+    Catches and replaces "col": with "column": in the raw JSON string before it hits the parser.
+    """
+    import re
+    # Replace abbreviated keys - tools expect full names
+    replacements = [
+        (r'"col"\s*:', '"column":'),
+        (r"'col'\s*:", "'column':"),
+        (r'"cols"\s*:', '"columns":'),
+        (r"'cols'\s*:", "'columns':"),
+        (r'"x_col"\s*:', '"x_column":'),
+        (r'"y_col"\s*:', '"y_column":'),
+        (r'"group_col"\s*:', '"group_column":'),
+        (r'"agg_col"\s*:', '"agg_column":'),
+    ]
+    changed = False
+    for pattern, repl in replacements:
+        new_text = re.sub(pattern, repl, text)
+        if new_text != text:
+            changed = True
+            text = new_text
+    if changed:
+        logger.info(f"[OUTPUT_PARSER] Preprocessed LLM text (col->column, etc.)")
+    return text
+
+
+def _patch_parser_normalize_keys(agent: AgentExecutor) -> None:
+    """Patch agent output parser to clean and normalize tool input keys (col->column)."""
+    if not hasattr(agent.agent, 'output_parser'):
+        return
+    original_parse = agent.agent.output_parser.parse
+
+    def patched_parse(text: str):
+        # CRITICAL: Preprocess BEFORE parse - validation happens during parse
+        text = _preprocess_llm_text_for_tool_input(text)
+        result = original_parse(text)
+        if hasattr(result, 'tool_input') and isinstance(result.tool_input, dict):
+            cleaned = {}
+            for k, v in result.tool_input.items():
+                ck = str(k).strip('"').strip("'").strip()
+                cv = v.strip('"').strip("'").strip() if isinstance(v, str) else v
+                cleaned[ck] = cv
+            result.tool_input = _normalize_tool_input_keys(cleaned)
+            logger.info(f"[OUTPUT_PARSER] Normalized tool input: {result.tool_input}")
+        return result
+
+    agent.agent.output_parser.parse = patched_parse
+    logger.info("Patched output parser for col->column normalization")
+
 
 class QuotedKeyCleaner(BaseModel):
     """Pydantic model that automatically strips quotes from string values."""
@@ -74,18 +151,15 @@ class LenientTool(Tool):
         """Run tool with cleaned inputs."""
         # Clean the input before processing
         if isinstance(tool_input, dict):
-            # Clean all string values in the dict
             cleaned_input = {}
             for key, value in tool_input.items():
-                # Clean key
                 cleaned_key = str(key).strip('"').strip("'").strip()
-                # Clean value
                 if isinstance(value, str):
                     cleaned_value = value.strip('"').strip("'").strip()
                 else:
                     cleaned_value = value
                 cleaned_input[cleaned_key] = cleaned_value
-            tool_input = cleaned_input
+            tool_input = _normalize_tool_input_keys(cleaned_input)
         
         # Call the original function
         return self.func(tool_input)
@@ -104,22 +178,18 @@ class QuotedKeyAgentExecutor(AgentExecutor):
             # Get the next action from the agent
             action = super()._get_next_action(full_inputs, intermediate_steps)
             
-            # Clean quoted keys from tool input
+            # Clean quoted keys and normalize col->column in tool input
             if hasattr(action, 'tool_input') and isinstance(action.tool_input, dict):
                 cleaned_input = {}
                 for key, value in action.tool_input.items():
-                    # Clean key (remove quotes)
                     cleaned_key = str(key).strip('"').strip("'").strip()
-                    # Clean value
                     if isinstance(value, str):
                         cleaned_value = value.strip('"').strip("'").strip()
                     else:
                         cleaned_value = value
                     cleaned_input[cleaned_key] = cleaned_value
-                
-                # Replace tool_input with cleaned version
-                action.tool_input = cleaned_input
-                logger.info(f"[AGENT_EXECUTOR] Cleaned tool input: {action.tool_input}")
+                action.tool_input = _normalize_tool_input_keys(cleaned_input)
+                logger.info(f"[AGENT_EXECUTOR] Cleaned and normalized tool input: {action.tool_input}")
             
             return action
         except Exception as e:
@@ -340,13 +410,14 @@ Returns base64-encoded image data.
 IMPORTANT: For chart requests like "show me a chart", "create a graph", "plot the data", "visualize", ALWAYS use this tool, NOT data_manipulator."""
         
         stats_desc = f"""Calculate statistical measures (mean, median, std, correlation, etc.).
+Parameters: "operation" (required), "column" (optional - use "column" never "col").
+Example: {{"operation": "mean", "column": "amount"}}
 Available columns: {columns_str}
-Use exact column names from the list above.
 Returns statistical results as JSON."""
         
         data_desc = f"""Perform data manipulation operations (filter, sort, group_by, select_columns, head, tail, unique).
+Parameters: "operation" (required), "column", "group_column", "agg_column", "columns" - use full names never "col" or "cols".
 Available columns: {columns_str}
-Use exact column names from the list above.
 Returns manipulated data as JSON.
 IMPORTANT: Do NOT use this tool for chart/graph/plot/visualization requests - use chart_generator instead."""
 
@@ -532,7 +603,11 @@ Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects c
                         cleaned_kwargs[cleaned_key] = value
                 
                 logger.info(f"[TOOL_WRAPPER] After quote stripping: {cleaned_kwargs}")
-                
+
+                # Normalize abbreviated keys (agent may use "col" instead of "column")
+                cleaned_kwargs = _normalize_tool_input_keys(cleaned_kwargs)
+                logger.info(f"[TOOL_WRAPPER] After key normalization: {cleaned_kwargs}")
+
                 # Now resolve column names
                 resolved_kwargs = {}
                 column_param_names = ['column', 'x_column', 'y_column', 'group_by', 'group_column', 'agg_column', 'columns']
@@ -742,8 +817,9 @@ Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects c
         
         logger.info(f"Creating agent - is_actual_openai: {is_actual_openai}, is_chatopenai: {is_chatopenai}")
         
-        # Try create_pandas_dataframe_agent first (better for DataFrame operations)
-        if HAS_PANDAS_AGENT:
+        # Use our custom tools exclusively - they have col->column normalization and explicit schemas.
+        # The pandas agent uses PythonAstREPLTool with schemas we cannot control (can cause "Missing key: col").
+        if False and HAS_PANDAS_AGENT:  # Disabled: prefer our schema-agnostic tools
             try:
                 logger.info("Attempting to create pandas dataframe agent")
                 agent = create_pandas_dataframe_agent(
@@ -755,6 +831,16 @@ Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects c
                     agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION
                 )
                 logger.info("Successfully created pandas dataframe agent")
+                if isinstance(agent, AgentExecutor):
+                    _patch_parser_normalize_keys(agent)
+                    return QuotedKeyAgentExecutor(
+                        agent=agent.agent,
+                        tools=agent.tools,
+                        verbose=agent.verbose,
+                        return_intermediate_steps=agent.return_intermediate_steps,
+                        memory=agent.memory,
+                        handle_parsing_errors=agent.handle_parsing_errors
+                    )
                 return agent
             except Exception as e:
                 logger.warning(f"Failed to create pandas dataframe agent: {e}, falling back to initialize_agent")
@@ -779,29 +865,9 @@ Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects c
                         agent_kwargs=agent_kwargs,
                         handle_parsing_errors=True
                     )
-                    # Patch the agent's output parser to clean quoted keys
-                    if isinstance(agent, AgentExecutor) and hasattr(agent.agent, 'output_parser'):
-                        original_parse = agent.agent.output_parser.parse
-                        def patched_parse(text: str):
-                            """Parse agent output and clean quoted keys from tool calls."""
-                            result = original_parse(text)
-                            # Clean quoted keys from tool input if present
-                            if hasattr(result, 'tool_input') and isinstance(result.tool_input, dict):
-                                cleaned_input = {}
-                                for key, value in result.tool_input.items():
-                                    # Clean key
-                                    cleaned_key = str(key).strip('"').strip("'").strip()
-                                    # Clean value
-                                    if isinstance(value, str):
-                                        cleaned_value = value.strip('"').strip("'").strip()
-                                    else:
-                                        cleaned_value = value
-                                    cleaned_input[cleaned_key] = cleaned_value
-                                result.tool_input = cleaned_input
-                                logger.info(f"[OUTPUT_PARSER] Cleaned tool input: {result.tool_input}")
-                            return result
-                        agent.agent.output_parser.parse = patched_parse
-                        logger.info("Patched agent output parser to clean quoted keys")
+                    # Patch output parser to normalize col->column
+                    if isinstance(agent, AgentExecutor):
+                        _patch_parser_normalize_keys(agent)
                     
                     # Wrap the agent executor to handle quoted keys
                     if isinstance(agent, AgentExecutor):
@@ -827,29 +893,9 @@ Optional: output_format 'html' (interactive) or 'png' (high-res). Auto-detects c
                 agent_kwargs=agent_kwargs,
                 handle_parsing_errors=True
             )
-            # Patch the agent's output parser to clean quoted keys
-            if isinstance(agent, AgentExecutor) and hasattr(agent.agent, 'output_parser'):
-                original_parse = agent.agent.output_parser.parse
-                def patched_parse(text: str):
-                    """Parse agent output and clean quoted keys from tool calls."""
-                    result = original_parse(text)
-                    # Clean quoted keys from tool input if present
-                    if hasattr(result, 'tool_input') and isinstance(result.tool_input, dict):
-                        cleaned_input = {}
-                        for key, value in result.tool_input.items():
-                            # Clean key
-                            cleaned_key = str(key).strip('"').strip("'").strip()
-                            # Clean value
-                            if isinstance(value, str):
-                                cleaned_value = value.strip('"').strip("'").strip()
-                            else:
-                                cleaned_value = value
-                            cleaned_input[cleaned_key] = cleaned_value
-                        result.tool_input = cleaned_input
-                        logger.info(f"[OUTPUT_PARSER] Cleaned tool input: {result.tool_input}")
-                    return result
-                agent.agent.output_parser.parse = patched_parse
-                logger.info("Patched agent output parser to clean quoted keys")
+            # Patch output parser to normalize col->column
+            if isinstance(agent, AgentExecutor):
+                _patch_parser_normalize_keys(agent)
             
             # Wrap the agent executor to handle quoted keys
             if isinstance(agent, AgentExecutor):

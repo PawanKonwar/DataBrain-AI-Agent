@@ -172,6 +172,9 @@ async def upload_dataset(file: UploadFile = File(...), dataset_name: Optional[st
                 detail=f"Unsupported file type: {suffix}. Supported: {sorted(SUPPORTED_RESEARCH_EXTENSIONS)}"
             )
         df = universal_loader(tmp_path, health_clean=True)
+
+        # Ensure no hidden spaces in column names (fixes validation errors with 'amount', etc.)
+        df.columns = [c.strip() if isinstance(c, str) else str(c).strip() for c in df.columns]
         
         # Clean up temp file
         os.unlink(tmp_path)
@@ -253,6 +256,16 @@ async def list_datasets():
         })
     
     return {"datasets": dataset_list}
+
+
+@app.get("/api/datasets/{dataset_name}/preview")
+async def get_dataset_preview(dataset_name: str, rows: int = 5):
+    """Return first N rows of a dataset for preview."""
+    if dataset_name not in datasets:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' not found")
+    df = datasets[dataset_name]
+    preview = df.head(rows)
+    return {"rows": preview.to_dict(orient="records"), "columns": list(df.columns)}
 
 
 @app.post("/api/query")

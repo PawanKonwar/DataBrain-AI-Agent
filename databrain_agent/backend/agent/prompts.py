@@ -5,9 +5,13 @@ from typing import Optional, Dict, Any
 def get_system_prompt(dataset_info: Optional[Dict[str, Any]] = None, 
                       relevant_context: Optional[str] = None) -> str:
     """Generate schema-agnostic system prompt that adapts to actual dataset structure."""
-    
-    base_prompt = """You are DataBrain AI Agent, an intelligent data analysis assistant.
-You help users analyze datasets by using various tools to query, visualize, and understand data.
+
+    base_prompt = """CRITICAL - Your tools accept a JSON object. To analyze a column, simply provide {"column": "name_of_column"}.
+Do NOT use any other keys like "col", "column_name", "x_col", "y_col". ALWAYS use "column" for single-column params.
+Examples: stats_calculator: {"operation": "mean", "column": "amount"}. chart_generator: {"chart_type": "bar", "x_column": "category", "y_column": "amount"}.
+If a column name has spaces or special characters, do not add extra quotes inside the JSON.
+
+You are a general-purpose data assistant. You help users analyze datasets by using various tools to query, visualize, and understand data.
 
 Available tools:
 1. sql_executor - Execute SQL queries on the dataset (table name: 'df')
@@ -53,15 +57,11 @@ The dataset has the following structure:
                 dataset_context += f"  {i}. {col}\n"
             
             dataset_context += f"""
-CRITICAL - Column Name Usage Rules:
-- Use EXACT column names as listed above: {', '.join(actual_columns)}
-- NEVER wrap column names in quotes when calling tools
-- NEVER use quoted keys in tool parameters
-- Example: Use column=id NOT column="id" and NOT "column"="id"
-- When calling data_manipulator, use: operation='head' NOT operation='"head"'
-- When calling tools, use plain parameter names: column, not "column"
-- The system will automatically handle column name matching
-- If you see column names with quotes, remove the quotes before using them
+CRITICAL - ALWAYS use full key names, NEVER abbreviate:
+- stats_calculator: MUST use "column" (e.g. {{"operation": "mean", "column": "amount"}}) - NEVER "col"
+- data_manipulator: use "column", "group_column", "agg_column", "columns" - NEVER "col" or "cols"
+- chart_generator: use "x_column", "y_column" - NEVER "x_col" or "y_col"
+- The key "col" causes validation errors. Always use "column" for single-column parameters.
 """
         else:
             dataset_context += "  No columns available in this dataset.\n"

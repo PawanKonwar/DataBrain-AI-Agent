@@ -6,9 +6,9 @@ Provides functionality to filter, sort, group, and manipulate DataFrames.
 Copyright (c) 2024 DataBrain AI Agent Contributors
 License: MIT
 """
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union, Type
 from langchain.tools import BaseTool
-from pydantic import Field
+from pydantic import BaseModel, Field, ConfigDict
 import pandas as pd
 import json
 import logging
@@ -16,17 +16,41 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _strip_column_quotes(value) -> Optional[str]:
+    """Strip quotes from column names the LLM may send."""
+    if value is None:
+        return None
+    s = str(value).replace("'", "").replace('"', "").strip()
+    return s if s else None
+
+
+class DataManipulationInput(BaseModel):
+    """Input schema for data_manipulator."""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    operation: str = Field(description="filter, sort, group_by, select_columns, head, tail, unique")
+    column: Optional[str] = Field(default=None, description="Column name", alias="col")
+    group_column: Optional[str] = Field(default=None, description="Group by column", alias="group_col")
+    agg_column: Optional[str] = Field(default=None, description="Aggregation column", alias="agg_col")
+    columns: Optional[Union[List[str], str]] = Field(default=None, description="Column list", alias="cols")
+    value: Optional[Any] = None
+    operator: Optional[str] = None
+    ascending: Optional[bool] = None
+    agg_func: Optional[str] = None
+    n: Optional[int] = None
+
+
 class DataManipulationTool(BaseTool):
     """Tool for basic data manipulation operations."""
-    
+
     name = "data_manipulator"
     description = """Perform data manipulation operations.
     Available operations: filter, sort, group_by, select_columns, head, tail, unique.
     Returns manipulated data as JSON.
     Available columns: Use the actual column names from the dataset."""
-    
+
     df: pd.DataFrame = Field(description="The DataFrame to manipulate")
-    
+    args_schema: Type[BaseModel] = DataManipulationInput
+
     def _validate_column(self, column: str) -> str:
         """
         Validate and normalize column name - schema-agnostic.
@@ -83,106 +107,81 @@ class DataManipulationTool(BaseTool):
         logger.error(f"[VALIDATE_COLUMN] Input type: {type(column)}, Input repr: {repr(column)}")
         raise ValueError(f"Column '{column}' not found. Available columns: {available}")
     
-    def _run(self, operation: str = None, **kwargs) -> str:
+    def _run(self, operation: str, column: Optional[str] = None, group_column: Optional[str] = None,
+             agg_column: Optional[str] = None, columns: Optional[Union[List[str], str]] = None,
+             value: Optional[Any] = None, operator: Optional[str] = None, ascending: Optional[bool] = None,
+             agg_func: Optional[str] = None, n: Optional[int] = None) -> str:
         """Perform data manipulation."""
         try:
-            # Handle missing operation parameter - it might be passed as keyword arg
+            column = _strip_column_quotes(column) if column else None
+            group_column = _strip_column_quotes(group_column) if group_column else None
+            agg_column = _strip_column_quotes(agg_column) if agg_column else None
+
             if operation is None:
-                # Try to get operation from kwargs if it wasn't passed as positional
-                operation = kwargs.pop('operation', None)
-                if operation is None:
-                    logger.error("DataManipulationTool called without 'operation' parameter")
-                    logger.error(f"Received kwargs: {kwargs}")
-                    
-                    # Check if this looks like a chart request that was misrouted
-                    chart_keywords = ['chart', 'graph', 'plot', 'visualize', 'bar', 'line', 'scatter', 'histogram']
-                    received_keys = [str(k).lower() for k in kwargs.keys()]
-                    received_values = [str(v).lower() for v in kwargs.values() if isinstance(v, str)]
-                    all_text = ' '.join(received_keys + received_values)
-                    
-                    if any(keyword in all_text for keyword in chart_keywords) or \
-                       any(key in ['chart_type', 'x_column', 'y_column', 'group_by'] for key in kwargs.keys()):
-                        return json.dumps({
-                            "error": "Chart request detected but wrong tool was used",
-                            "hint": "Please use the chart_generator tool for chart requests, not data_manipulator",
-                            "received_params": list(kwargs.keys()),
-                            "suggestion": "Retry the request with chart_generator tool"
-                        })
-                    
-                    return json.dumps({
-                        "error": "Missing required parameter 'operation'. Available operations: filter, sort, group_by, select_columns, head, tail, unique",
-                        "hint": "If you're trying to generate a chart, use the chart_generator tool instead.",
-                        "received_params": list(kwargs.keys())
-                    })
+                return json.dumps({
+                    "error": "Missing required parameter 'operation'. Available operations: filter, sort, group_by, select_columns, head, tail, unique",
+                    "received_params": ["operation"]
+                })
             if operation == "filter":
-                # Filter by column and value
-                column = kwargs.get("column")
                 if not column:
-                    return f"Error: 'column' parameter required. Available columns: {', '.join(self.df.columns.tolist())}"
+                    return "Please specify a column."
                 column = self._validate_column(column)
-                value = kwargs.get("value")
-                operator = kwargs.get("operator", "==")
+                op_val = operator or "=="
                 
-                if operator == "==":
+                if op_val == "==":
                     result = self.df[self.df[column] == value]
-                elif operator == ">":
+                elif op_val == ">":
                     result = self.df[self.df[column] > value]
-                elif operator == "<":
+                elif op_val == "<":
                     result = self.df[self.df[column] < value]
-                elif operator == ">=":
+                elif op_val == ">=":
                     result = self.df[self.df[column] >= value]
-                elif operator == "<=":
+                elif op_val == "<=":
                     result = self.df[self.df[column] <= value]
                 else:
-                    return f"Error: Unsupported operator '{operator}'"
+                    return f"Error: Unsupported operator '{op_val}'"
                 
                 return result.to_json(orient="records")
             
             elif operation == "sort":
-                column = kwargs.get("column")
                 if column:
                     column = self._validate_column(column)
                 else:
                     column = self.df.columns[0]
-                ascending = kwargs.get("ascending", True)
-                result = self.df.sort_values(by=column, ascending=ascending)
+                asc = ascending if ascending is not None else True
+                result = self.df.sort_values(by=column, ascending=asc)
                 return result.to_json(orient="records")
             
             elif operation == "group_by":
-                group_column = kwargs.get("group_column")
-                agg_column = kwargs.get("agg_column")
                 if not group_column or not agg_column:
                     return f"Error: 'group_column' and 'agg_column' required. Available columns: {', '.join(self.df.columns.tolist())}"
                 group_column = self._validate_column(group_column)
                 agg_column = self._validate_column(agg_column)
-                agg_func = kwargs.get("agg_func", "sum")
+                af = agg_func or "sum"
                 
-                grouped = self.df.groupby(group_column)[agg_column].agg(agg_func)
+                grouped = self.df.groupby(group_column)[agg_column].agg(af)
                 return grouped.to_json()
             
             elif operation == "select_columns":
-                columns = kwargs.get("columns", [])
-                if isinstance(columns, str):
-                    columns = [col.strip() for col in columns.split(",")]
-                if not columns:
+                cols = columns or []
+                if isinstance(cols, str):
+                    cols = [c.strip() for c in cols.split(",")]
+                cols = [c for c in (_strip_column_quotes(col) or (str(col).strip() if col else None) for col in cols) if c]
+                if not cols:
                     return f"Error: 'columns' parameter required. Available columns: {', '.join(self.df.columns.tolist())}"
-                # Validate all columns
-                validated_columns = []
-                for col in columns:
-                    validated_columns.append(self._validate_column(col))
+                validated_columns = [self._validate_column(col) for col in cols]
                 result = self.df[validated_columns]
                 return result.to_json(orient="records")
             
             elif operation == "head":
-                n = kwargs.get("n", 5)
-                return self.df.head(n).to_json(orient="records")
+                rows = n if n is not None else 5
+                return self.df.head(rows).to_json(orient="records")
             
             elif operation == "tail":
-                n = kwargs.get("n", 5)
-                return self.df.tail(n).to_json(orient="records")
+                rows = n if n is not None else 5
+                return self.df.tail(rows).to_json(orient="records")
             
             elif operation == "unique":
-                column = kwargs.get("column")
                 if column:
                     column = self._validate_column(column)
                     result = self.df[column].unique().tolist()
@@ -198,6 +197,10 @@ class DataManipulationTool(BaseTool):
         except Exception as e:
             return f"Error performing data manipulation: {str(e)}"
     
-    async def _arun(self, operation: str, **kwargs) -> str:
+    async def _arun(self, operation: str, column: Optional[str] = None, group_column: Optional[str] = None,
+                    agg_column: Optional[str] = None, columns: Optional[Union[List[str], str]] = None,
+                    value: Optional[Any] = None, operator: Optional[str] = None, ascending: Optional[bool] = None,
+                    agg_func: Optional[str] = None, n: Optional[int] = None) -> str:
         """Async execution."""
-        return self._run(operation, **kwargs)
+        return self._run(operation, column, group_column, agg_column, columns,
+                        value, operator, ascending, agg_func, n)
