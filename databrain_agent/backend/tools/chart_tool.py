@@ -9,7 +9,7 @@ License: MIT
 """
 from typing import Optional, Dict, Any, List, Type
 from langchain.tools import BaseTool
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
@@ -23,21 +23,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _strip_column_quotes(value: Optional[str]) -> Optional[str]:
-    """Strip quotes from column names the LLM may send."""
-    if value is None:
-        return None
-    s = str(value).replace("'", "").replace('"', "").strip()
-    return s if s else None
-
-
 class ChartInput(BaseModel):
     """Input schema for chart_generator."""
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
     chart_type: str = Field(description="bar, line, scatter, histogram, box, heatmap")
-    x_column: Optional[str] = Field(default=None, description="X-axis column", alias="x_col")
-    y_column: Optional[str] = Field(default=None, description="Y-axis column", alias="y_col")
-    group_by: Optional[str] = Field(default=None, description="Group by column", alias="group_col")
+    column: Optional[str] = Field(default=None, description="The name of the column to analyze")
+    x_column: Optional[str] = Field(default=None, description="X-axis column")
+    y_column: Optional[str] = Field(default=None, description="Y-axis column")
+    group_by: Optional[str] = Field(default=None, description="Group by column")
     title: Optional[str] = Field(default=None, description="Chart title")
 
 
@@ -72,13 +64,21 @@ class ChartGeneratorTool(BaseTool):
         logger.warning(f"Column '{column}' (normalized: '{normalized_input}') not found. Available: {available}")
         raise ValueError(f"Column '{column}' not found. Available columns: {available}")
     
-    def _run(self, chart_type: str, x_column: Optional[str] = None, y_column: Optional[str] = None,
-             group_by: Optional[str] = None, title: Optional[str] = None) -> str:
+    def _run(self, chart_type: str, column: Optional[str] = None, x_column: Optional[str] = None,
+             y_column: Optional[str] = None, group_by: Optional[str] = None, title: Optional[str] = None) -> str:
         """Generate chart from DataFrame."""
         try:
-            x_column = _strip_column_quotes(x_column)
-            y_column = _strip_column_quotes(y_column)
-            group_by = _strip_column_quotes(group_by)
+            if column:
+                column = column.replace("'", "").replace('"', "").strip() or None
+            if x_column:
+                x_column = x_column.replace("'", "").replace('"', "").strip() or None
+            if y_column:
+                y_column = y_column.replace("'", "").replace('"', "").strip() or None
+            if group_by:
+                group_by = group_by.replace("'", "").replace('"', "").strip() or None
+            # Use column as x_column fallback when x_column not provided
+            if not x_column and column:
+                x_column = column
             if not chart_type:
                 return json.dumps({"error": "Chart type is required"})
             
@@ -185,7 +185,7 @@ class ChartGeneratorTool(BaseTool):
             logger.error(f"Chart generation error: {e}", exc_info=True)
             return json.dumps({"error": f"Error generating chart: {str(e)}", "status": "error"})
     
-    async def _arun(self, chart_type: str, x_column: Optional[str] = None, y_column: Optional[str] = None,
-                    group_by: Optional[str] = None, title: Optional[str] = None) -> str:
+    async def _arun(self, chart_type: str, column: Optional[str] = None, x_column: Optional[str] = None,
+                    y_column: Optional[str] = None, group_by: Optional[str] = None, title: Optional[str] = None) -> str:
         """Async execution."""
-        return self._run(chart_type, x_column, y_column, group_by, title)
+        return self._run(chart_type, column, x_column, y_column, group_by, title)

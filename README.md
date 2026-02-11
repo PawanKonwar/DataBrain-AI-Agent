@@ -125,12 +125,12 @@ Automated overlay plots for comparative research:
 
 ### Tool Validation & Reliability
 
-- **Pydantic input schemas** – All analysis tools (`stats_calculator`, `data_manipulator`, `chart_generator`) now use proper Pydantic `BaseModel` input schemas with `args_schema: Type[BaseModel]` for type-safe, validated tool calls.
-- **Alias support** – Schemas accept `col` → `column`, `cols` → `columns`, `x_col` → `x_column`, `y_col` → `y_column`, `group_col` → `group_column`, `agg_col` → `agg_column` via `populate_by_name=True`.
-- **Column name stripping** – On dataset upload (`main.py`), DataFrame columns are stripped: `df.columns = [c.strip() for c in df.columns]` to eliminate hidden spaces that caused validation errors.
-- **Handle parsing errors** – Agent executor uses `handle_parsing_errors=True` so the agent can self-correct on malformed tool inputs instead of surfacing a hard error.
-- **System prompt updates** – Prompts explicitly instruct the LLM to use `{"column": "name_of_column"}` for tool calls and avoid abbreviated keys; includes concrete examples for `stats_calculator` and `chart_generator`.
-- **Graceful fallbacks** – Tools return friendly messages like `"Please specify a column."` when required column parameters are missing.
+- **Simple Pydantic schemas** – All analysis tools use minimal `BaseModel` input schemas (`StatsInput`, `DataManipulationInput`, `ChartInput`) with `args_schema: Type[BaseModel]`—no `ConfigDict` or aliases, fixing `pydantic.v1.errors.ConfigError`.
+- **Use "column" only** – Agent is instructed to always use the key `"column"`; never abbreviate to `"col"`. Column names with spaces must match the dataset preview exactly.
+- **Column input cleaning** – Tools sanitize column inputs with `column.replace("'", "").replace('"', "").strip()` to handle quoted or malformed names.
+- **Column name stripping on load** – On dataset upload (`main.py`), `df.columns = [c.strip() for c in df.columns]` removes hidden spaces.
+- **Handle parsing errors** – Agent executor uses `handle_parsing_errors=True` so the agent can self-correct on malformed tool inputs.
+- **Universal data assistant** – System prompt: *"You are a universal data assistant. When using tools, you MUST use the key 'column'. Never abbreviate to 'col'. If the user's data has spaces in column names, use the exact name as shown in the dataset preview."*
 
 ### Files Modified
 
@@ -138,10 +138,10 @@ Automated overlay plots for comparative research:
 |------|---------|
 | `main.py` | Column stripping on upload; column cleanup in query flow |
 | `agent/orchestrator.py` | `handle_parsing_errors=True`; `QuotedKeyAgentExecutor`; key normalization |
-| `agent/prompts.py` | Blunt tool-input instructions; JSON format examples |
-| `tools/stats_tool.py` | `StatsInput` Pydantic schema; explicit `_run(operation, column)` |
-| `tools/data_tool.py` | `DataManipulationInput` Pydantic schema; explicit `_run(...)` params |
-| `tools/chart_tool.py` | `ChartInput` Pydantic schema; explicit `_run(chart_type, x_column, ...)` |
+| `agent/prompts.py` | Universal data assistant prompt; use "column" only, exact names from preview |
+| `tools/stats_tool.py` | `StatsInput` schema; `_run(operation, column)`; inline column cleaning |
+| `tools/data_tool.py` | `DataManipulationInput` schema; explicit params; inline column cleaning |
+| `tools/chart_tool.py` | `ChartInput` schema; `column`, `x_column`, `y_column`, `group_by`; inline cleaning |
 
 ---
 

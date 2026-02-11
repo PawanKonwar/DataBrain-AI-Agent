@@ -6,12 +6,9 @@ def get_system_prompt(dataset_info: Optional[Dict[str, Any]] = None,
                       relevant_context: Optional[str] = None) -> str:
     """Generate schema-agnostic system prompt that adapts to actual dataset structure."""
 
-    base_prompt = """CRITICAL - Your tools accept a JSON object. To analyze a column, simply provide {"column": "name_of_column"}.
-Do NOT use any other keys like "col", "column_name", "x_col", "y_col". ALWAYS use "column" for single-column params.
-Examples: stats_calculator: {"operation": "mean", "column": "amount"}. chart_generator: {"chart_type": "bar", "x_column": "category", "y_column": "amount"}.
-If a column name has spaces or special characters, do not add extra quotes inside the JSON.
+    base_prompt = """You are a universal data assistant. When using tools, you MUST use the key "column". Never abbreviate to "col". If the user's data has spaces in column names, use the exact name as shown in the dataset preview.
 
-You are a general-purpose data assistant. You help users analyze datasets by using various tools to query, visualize, and understand data.
+You help users analyze datasets by using various tools to query, visualize, and understand data.
 
 Available tools:
 1. sql_executor - Execute SQL queries on the dataset (table name: 'df')

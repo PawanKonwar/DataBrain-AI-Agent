@@ -8,7 +8,7 @@ License: MIT
 """
 from typing import Optional, Dict, Any, List, Union, Type
 from langchain.tools import BaseTool
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 import pandas as pd
 import json
 import logging
@@ -16,22 +16,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _strip_column_quotes(value) -> Optional[str]:
-    """Strip quotes from column names the LLM may send."""
-    if value is None:
-        return None
-    s = str(value).replace("'", "").replace('"', "").strip()
-    return s if s else None
-
-
 class DataManipulationInput(BaseModel):
     """Input schema for data_manipulator."""
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
     operation: str = Field(description="filter, sort, group_by, select_columns, head, tail, unique")
-    column: Optional[str] = Field(default=None, description="Column name", alias="col")
-    group_column: Optional[str] = Field(default=None, description="Group by column", alias="group_col")
-    agg_column: Optional[str] = Field(default=None, description="Aggregation column", alias="agg_col")
-    columns: Optional[Union[List[str], str]] = Field(default=None, description="Column list", alias="cols")
+    column: Optional[str] = Field(default=None, description="The name of the column to analyze")
+    group_column: Optional[str] = Field(default=None, description="Group by column")
+    agg_column: Optional[str] = Field(default=None, description="Aggregation column")
+    columns: Optional[Union[List[str], str]] = Field(default=None, description="Column list")
     value: Optional[Any] = None
     operator: Optional[str] = None
     ascending: Optional[bool] = None
@@ -113,9 +104,12 @@ class DataManipulationTool(BaseTool):
              agg_func: Optional[str] = None, n: Optional[int] = None) -> str:
         """Perform data manipulation."""
         try:
-            column = _strip_column_quotes(column) if column else None
-            group_column = _strip_column_quotes(group_column) if group_column else None
-            agg_column = _strip_column_quotes(agg_column) if agg_column else None
+            if column:
+                column = column.replace("'", "").replace('"', "").strip() or None
+            if group_column:
+                group_column = group_column.replace("'", "").replace('"', "").strip() or None
+            if agg_column:
+                agg_column = agg_column.replace("'", "").replace('"', "").strip() or None
 
             if operation is None:
                 return json.dumps({
@@ -166,7 +160,7 @@ class DataManipulationTool(BaseTool):
                 cols = columns or []
                 if isinstance(cols, str):
                     cols = [c.strip() for c in cols.split(",")]
-                cols = [c for c in (_strip_column_quotes(col) or (str(col).strip() if col else None) for col in cols) if c]
+                cols = [c for col in cols if col for c in [str(col).replace("'", "").replace('"', "").strip()] if c]
                 if not cols:
                     return f"Error: 'columns' parameter required. Available columns: {', '.join(self.df.columns.tolist())}"
                 validated_columns = [self._validate_column(col) for col in cols]
