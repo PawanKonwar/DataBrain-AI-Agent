@@ -41,18 +41,22 @@ DataBrain AI Agent is designed for scientists and engineers who work with real-w
 ```bash
 git clone https://github.com/yourusername/DataBrain-AI-Agent.git
 cd DataBrain-AI-Agent
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env       # Add your OPENAI_API_KEY or DEEPSEEK_API_KEY
 
-# Start backend
-cd databrain_agent/backend && python main.py
+# Start backend (from project root)
+./run_server.sh
+# Or: cd databrain_agent/backend && python main.py
 ```
 
 ### Step 2: Open the UI
 
-- Open `frontend/index.html` in your browser, or run `python -m http.server 8080` in the `frontend/` folder and go to `http://localhost:8080`
+Choose one:
+
+- **HTML frontend** – Open `frontend/index.html` in your browser (or run `python -m http.server 8080` in `frontend/` and go to `http://localhost:8080`)
+- **Streamlit dashboard** – Run `streamlit run streamlit_ui/dashboard.py` and open `http://localhost:8501`
 
 ### Step 3: Upload and analyze
 
@@ -94,10 +98,9 @@ Data is cleaned automatically after loading:
 - **Sensor glitches** – Forward-fills null values in numeric columns
 - **Non-numeric strings** – Coerces values like `"N/A"`, `"---"`, `"error"` to `NaN`
 - **Duplicate timestamps** – Removes duplicate rows by time column
+- **Column name stripping** – Removes leading/trailing whitespace from column names on load
 
 No manual cleaning before upload.
-
-- **Column name stripping** – Removes leading/trailing whitespace from column names on load (fixes validation errors with columns like `amount`).
 
 ### Batch Processing
 
@@ -157,12 +160,14 @@ Automated overlay plots for comparative research:
 ```bash
 git clone https://github.com/yourusername/DataBrain-AI-Agent.git
 cd DataBrain-AI-Agent
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and add OPENAI_API_KEY=... or DEEPSEEK_API_KEY=...
 ```
+
+The backend runs at `http://localhost:8000`. Use `./run_server.sh` from the project root to start it.
 
 ---
 
@@ -220,24 +225,27 @@ cp .env.example .env
 DataBrain-AI-Agent/
 ├── databrain_agent/backend/
 │   ├── main.py              # FastAPI server
-│   ├── data_cleaner.py      # Universal loader, health clean, research parsing
+│   ├── data_cleaner.py      # Universal loader, health clean
 │   ├── research_parser.py   # Compatibility shim
+│   ├── schemas.py           # Pydantic models
+│   ├── compat.py            # LangChain/Pydantic compatibility
 │   ├── agent/
 │   │   ├── orchestrator.py  # Agent & tool orchestration
 │   │   ├── memory.py        # RAG memory (ChromaDB)
-│   │   └── prompts.py
+│   │   └── prompts.py       # System prompts
 │   ├── tools/
 │   │   ├── sql_tool.py      # SQL on DataFrames
-│   │   ├── chart_tool.py    # Bar, line, scatter, etc.
-│   │   ├── stats_tool.py    # Statistics
-│   │   ├── data_tool.py     # Filter, sort, group
-│   │   ├── read_file_tool.py         # Load file or directory
+│   │   ├── chart_tool.py    # Bar, line, scatter, histogram, etc.
+│   │   ├── stats_tool.py    # mean, median, std, correlation, etc.
+│   │   ├── data_tool.py     # Filter, sort, group, head, tail
+│   │   ├── read_file_tool.py           # Load file or directory
 │   │   ├── batch_research_summarizer.py  # Master DataFrame from folder
-│   │   └── research_plotter.py       # Overlay plots
-│   └── llm/
+│   │   └── research_plotter.py          # Overlay plots
+│   └── llm/                 # Multi-LLM router, cost tracking
 ├── frontend/                # Web UI (HTML/JS)
-├── streamlit_ui/            # Streamlit dashboard UI
+├── streamlit_ui/            # Streamlit dashboard (streamlit run streamlit_ui/dashboard.py)
 ├── tests/
+├── run_server.sh            # Start backend from project root
 ├── requirements.txt
 └── README.md
 ```
@@ -255,15 +263,23 @@ DEEPSEEK_API_KEY=your_key_here   # Optional
 
 ### Server
 
-Runs at `http://localhost:8000` by default. Use `run_server.sh` or:
+Runs at `http://localhost:8000` by default:
 
 ```bash
-cd databrain_agent/backend && python main.py
+./run_server.sh
+# Or: cd databrain_agent/backend && python main.py
 ```
+
+### More Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) – Deployment guide
+- [docs/](docs/) – API keys setup, server docs, implementation notes
 
 ---
 
 ## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Quick steps:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
